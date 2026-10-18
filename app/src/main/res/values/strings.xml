@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Nova AI</string>
+    <string name="new_chat">New Chat</string>
+    <string name="ask_nova_hint">Ask Nova anything…</string>
+    <string name="clear_chat">Clear Chat</string>
+    <string name="settings">Settings</string>
+    <string name="conversations">Conversations</string>
+    <string name="capabilities">Nova Capabilities</string>
+</resources>
