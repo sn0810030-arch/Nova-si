@@ -391,6 +391,23 @@ fun ChatScreen(
                             )
 
                             DropdownMenuItem(
+                                text = { Text("Summarize Chat to 30MB Memory", color = NovaTextPrimary) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Psychology,
+                                        contentDescription = null,
+                                        tint = NovaCyan
+                                    )
+                                },
+                                onClick = {
+                                    viewModel.summarizeCurrentSessionToMemory { result ->
+                                        Toast.makeText(context, result, Toast.LENGTH_SHORT).show()
+                                    }
+                                    showMoreMenu = false
+                                }
+                            )
+
+                            DropdownMenuItem(
                                 text = { Text("Clear Current Chat", color = NovaTextPrimary) },
                                 leadingIcon = {
                                     Icon(
@@ -512,7 +529,7 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Avatar3DView(
                     state = avatarState,
@@ -535,6 +552,45 @@ fun ChatScreen(
                         tint = NovaTextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
+                }
+            }
+
+            // Quick Expression Tester Strip
+            if (isAvatarExpanded) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(listOf(
+                        "Idle" to AvatarState.IDLE,
+                        "Happy" to AvatarState.HAPPY,
+                        "Thinking" to AvatarState.THINKING,
+                        "Speaking" to AvatarState.SPEAKING,
+                        "Apologetic" to AvatarState.APOLOGETIC,
+                        "Surprised" to AvatarState.SURPRISED,
+                        "Confused" to AvatarState.CONFUSED,
+                        "Listening" to AvatarState.LISTENING
+                    )) { (label, state) ->
+                        val isCurrent = avatarState == state
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isCurrent) Color(0xFF1E293B) else NovaSurfaceDark)
+                                .border(1.dp, if (isCurrent) NovaCyan else NovaSurfaceCardBorder, RoundedCornerShape(8.dp))
+                                .clickable { AvatarStateManager.transitionTo(state) }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (isCurrent) NovaCyan else NovaTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                    }
                 }
             }
 

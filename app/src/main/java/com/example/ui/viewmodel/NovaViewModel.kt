@@ -550,6 +550,29 @@ class NovaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun summarizeCurrentSessionToMemory(onResult: (String) -> Unit) {
+        val msgs = currentMessages.value
+        if (msgs.isEmpty()) {
+            onResult("No messages in this chat to summarize.")
+            return
+        }
+        viewModelScope.launch {
+            val userPoints = msgs.filter { it.isFromUser }.map { it.text }.takeLast(4).joinToString("; ")
+            val title = _currentSession.value?.title ?: "Chat"
+            val key = "Summary: $title"
+            val content = "Key user topics discussed: $userPoints"
+            memoryManager.saveMemory(
+                key = key,
+                content = content,
+                category = "CONVERSATION_SUMMARY",
+                source = "SYSTEM_SUMMARY",
+                importance = 7
+            )
+            refreshMemoryUsage()
+            onResult("Conversation summary saved to 30 MB memory!")
+        }
+    }
+
     fun saveMemoryFact(key: String, content: String) {
         viewModelScope.launch {
             memoryManager.saveMemory(key, content)
