@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.app.Activity
+import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
@@ -34,11 +35,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -73,9 +79,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.avatar.Avatar3DView
+import com.example.avatar.AvatarState
+import com.example.avatar.AvatarStateManager
 import com.example.data.model.NovaPersona
+import com.example.ui.components.ActionConfirmationDialog
 import com.example.ui.components.ChatBubble
-import com.example.ui.components.NovaHeroCard
 import com.example.ui.components.PromptStarterChips
 import com.example.ui.components.ThinkingBubble
 import com.example.ui.components.VoiceCommandDialog
@@ -97,9 +106,13 @@ fun ChatScreen(
     viewModel: NovaViewModel,
     onNavigateToSessions: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToMemory: () -> Unit,
+    onNavigateToTasks: () -> Unit,
+    onNavigateToDevices: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val app = context.applicationContext as Application
     val messages by viewModel.currentMessages.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
     val currentPersona by viewModel.currentPersona.collectAsState()
@@ -108,15 +121,18 @@ fun ChatScreen(
     val autoReadVoice by viewModel.autoReadVoiceResponse.collectAsState()
     val lastVoiceCommand by viewModel.lastVoiceCommandText.collectAsState()
     val isVoiceListening by viewModel.isVoiceListening.collectAsState()
+    val avatarState by viewModel.avatarState.collectAsState()
+    val pendingAction by viewModel.pendingActionToConfirm.collectAsState()
 
     var inputText by remember { mutableStateOf("") }
     var showPersonaMenu by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showVoiceDialog by remember { mutableStateOf(false) }
+    var isAvatarExpanded by remember { mutableStateOf(true) }
 
     val listState = rememberLazyListState()
 
-    // Speech Recognizer Intent Launcher
+    // Speech Recognizer Launcher
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -128,26 +144,28 @@ fun ChatScreen(
                     Toast.makeText(context, feedback, Toast.LENGTH_SHORT).show()
                 }
             }
+        } else {
+            AvatarStateManager.returnToIdle()
         }
     }
 
     fun startSpeechRecognition() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak a question or voice command…")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Yesmin (Questions or Voice Commands)…")
         }
         try {
             viewModel.isVoiceListening.value = true
+            AvatarStateManager.onUserStartedSpeaking()
             speechLauncher.launch(intent)
         } catch (e: Exception) {
             viewModel.isVoiceListening.value = false
-            // Fallback to voice command helper dialog
+            AvatarStateManager.returnToIdle()
             showVoiceDialog = true
-            Toast.makeText(context, "Voice input dialog opened", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Voice command hub opened", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Permission Launcher for RECORD_AUDIO
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -155,7 +173,7 @@ fun ChatScreen(
             startSpeechRecognition()
         } else {
             showVoiceDialog = true
-            Toast.makeText(context, "Microphone permission required for direct voice", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Microphone permission required for voice", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -192,12 +210,12 @@ fun ChatScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { showPersonaMenu = true }
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                            .padding(horizontal = 4.dp, vertical = 4.dp)
                             .testTag("persona_dropdown_trigger")
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(28.dp)
                                 .clip(CircleShape)
                                 .background(Brush.linearGradient(listOf(NovaCyan, NovaPurple))),
                             contentAlignment = Alignment.Center
@@ -206,16 +224,16 @@ fun ChatScreen(
                                 imageVector = getPersonaIcon(currentPersona.iconName),
                                 contentDescription = currentPersona.title,
                                 tint = NovaCosmicBg,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = currentSession?.title?.ifBlank { "Nova AI" } ?: "Nova AI",
+                                    text = currentSession?.title?.ifBlank { "Yesmin AI" } ?: "Yesmin AI",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = NovaTextPrimary
@@ -227,14 +245,14 @@ fun ChatScreen(
                                     imageVector = Icons.Default.ArrowDropDown,
                                     contentDescription = "Select Persona",
                                     tint = NovaTextSecondary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             Text(
-                                text = "${currentPersona.title} • $selectedModel",
+                                text = "${currentPersona.title} • 3D Avatar",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = NovaCyan,
-                                    fontSize = 11.sp
+                                    fontSize = 10.sp
                                 )
                             )
                         }
@@ -289,28 +307,31 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    // Memory & Self-Correction Hub Button
                     IconButton(
-                        onClick = { showVoiceDialog = true },
-                        modifier = Modifier.testTag("voice_hub_button")
+                        onClick = onNavigateToMemory,
+                        modifier = Modifier.testTag("memory_nav_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.RecordVoiceOver,
-                            contentDescription = "Voice Commands",
+                            imageVector = Icons.Default.Psychology,
+                            contentDescription = "30MB Memory & Rules",
                             tint = NovaCyan
                         )
                     }
 
+                    // Scheduled Tasks & Alarms Button
                     IconButton(
-                        onClick = { viewModel.createNewSession(currentPersona) },
-                        modifier = Modifier.testTag("new_chat_button")
+                        onClick = onNavigateToTasks,
+                        modifier = Modifier.testTag("tasks_nav_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "New Chat",
-                            tint = NovaCyan
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = "Alarms & Reminders",
+                            tint = NovaTextSecondary
                         )
                     }
 
+                    // Settings & More
                     IconButton(
                         onClick = onNavigateToSettings,
                         modifier = Modifier.testTag("settings_button")
@@ -340,6 +361,36 @@ fun ChatScreen(
                             modifier = Modifier.background(NovaSurfaceCard)
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Smart Devices & Bluetooth", color = NovaTextPrimary) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Headphones,
+                                        contentDescription = null,
+                                        tint = NovaCyan
+                                    )
+                                },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onNavigateToDevices()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = { Text("Voice Commands Hub", color = NovaTextPrimary) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.RecordVoiceOver,
+                                        contentDescription = null,
+                                        tint = NovaCyan
+                                    )
+                                },
+                                onClick = {
+                                    showMoreMenu = false
+                                    showVoiceDialog = true
+                                }
+                            )
+
+                            DropdownMenuItem(
                                 text = { Text("Clear Current Chat", color = NovaTextPrimary) },
                                 leadingIcon = {
                                     Icon(
@@ -356,13 +407,11 @@ fun ChatScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = NovaCosmicBg
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = NovaCosmicBg)
             )
         },
         bottomBar = {
-            // Chat Input Bar
+            // Chat & Voice Input Bar
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -403,7 +452,7 @@ fun ChatScreen(
                             .testTag("chat_input_field"),
                         placeholder = {
                             Text(
-                                text = "Ask ${currentPersona.title} anything…",
+                                text = "Ask Yesmin or give voice command…",
                                 color = NovaTextSecondary,
                                 fontSize = 14.sp
                             )
@@ -454,112 +503,184 @@ fun ChatScreen(
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (messages.isEmpty()) {
-                // Empty state: Hero Card + Persona Starters
-                LazyColumn(
+            // PROMINENT 3D YESMIN AVATAR ON HOME SCREEN
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                Avatar3DView(
+                    state = avatarState,
+                    heightDp = if (isAvatarExpanded) 190 else 100,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Minimize/Maximize toggle button for 3D Avatar
+                IconButton(
+                    onClick = { isAvatarExpanded = !isAvatarExpanded },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(30.dp)
+                        .testTag("toggle_avatar_size_button")
                 ) {
-                    item {
-                        NovaHeroCard(
-                            currentPersona = currentPersona,
-                            modelName = selectedModel
-                        )
-                    }
+                    Icon(
+                        imageVector = if (isAvatarExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Toggle Avatar Size",
+                        tint = NovaTextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
-                    // Persona Horizontal Selector
-                    item {
-                        Column {
-                            Text(
-                                text = "Select Mode",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = NovaTextSecondary,
-                                    letterSpacing = 0.5.sp
-                                ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                if (messages.isEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Quick Action Presets
+                        item {
+                            Column {
+                                Text(
+                                    text = "Supported Voice & External Actions",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NovaTextSecondary,
+                                        letterSpacing = 0.5.sp
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                )
 
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(vertical = 4.dp)
-                            ) {
-                                items(NovaPersona.values()) { persona ->
-                                    val isSelected = persona == currentPersona
-                                    Row(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) Color(0xFF1E293B) else NovaSurfaceDark)
-                                            .border(
-                                                1.dp,
-                                                if (isSelected) NovaCyan else NovaSurfaceCardBorder,
-                                                RoundedCornerShape(12.dp)
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    items(listOf(
+                                        "💬 WhatsApp 'Hi' to Rahul" to "Rahul ko WhatsApp par Hi message karo",
+                                        "⏰ Set Alarm 6:30 AM" to "Set an alarm for 6:30 AM",
+                                        "📅 Calendar Meeting" to "Schedule a meeting with Rahul on Monday at 3 PM",
+                                        "🔔 Remind Tomorrow 8 AM" to "Tomorrow at 8 AM remind me to study",
+                                        "🎧 Bluetooth Audio" to "Show my connected Bluetooth devices"
+                                    )) { (label, prompt) ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(NovaSurfaceDark)
+                                                .border(1.dp, NovaSurfaceCardBorder, RoundedCornerShape(12.dp))
+                                                .clickable { viewModel.sendMessage(prompt) }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    color = NovaCyan,
+                                                    fontWeight = FontWeight.Medium
+                                                )
                                             )
-                                            .clickable { viewModel.setPersona(persona) }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = getPersonaIcon(persona.iconName),
-                                            contentDescription = null,
-                                            tint = if (isSelected) NovaCyan else NovaTextSecondary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = persona.title,
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isSelected) NovaCyan else NovaTextPrimary
-                                            )
-                                        )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Prompt Starter Chips
-                    item {
-                        PromptStarterChips(
-                            persona = currentPersona,
-                            onPromptSelected = { selectedPrompt ->
-                                viewModel.sendMessage(selectedPrompt)
-                            }
-                        )
-                    }
-                }
-            } else {
-                // Messages List
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(messages, key = { it.id }) { msg ->
-                        ChatBubble(
-                            message = msg,
-                            onSpeak = { text -> viewModel.speakText(text) },
-                            onRetry = if (msg.isError) {
-                                { viewModel.retryLastMessage() }
-                            } else null
-                        )
-                    }
-
-                    if (isGenerating) {
+                        // Persona Selector Row
                         item {
-                            ThinkingBubble()
+                            Column {
+                                Text(
+                                    text = "Active Persona",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NovaTextSecondary
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                )
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    items(NovaPersona.values()) { persona ->
+                                        val isSelected = persona == currentPersona
+                                        Row(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(if (isSelected) Color(0xFF1E293B) else NovaSurfaceDark)
+                                                .border(
+                                                    1.dp,
+                                                    if (isSelected) NovaCyan else NovaSurfaceCardBorder,
+                                                    RoundedCornerShape(12.dp)
+                                                )
+                                                .clickable { viewModel.setPersona(persona) }
+                                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = getPersonaIcon(persona.iconName),
+                                                contentDescription = null,
+                                                tint = if (isSelected) NovaCyan else NovaTextSecondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = persona.title,
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) NovaCyan else NovaTextPrimary
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Suggested Prompt Starter Chips
+                        item {
+                            PromptStarterChips(
+                                persona = currentPersona,
+                                onPromptSelected = { selectedPrompt ->
+                                    viewModel.sendMessage(selectedPrompt)
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    // Chat Messages List
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(messages, key = { it.id }) { msg ->
+                            ChatBubble(
+                                message = msg,
+                                onSpeak = { text -> viewModel.speakText(text) },
+                                onRetry = if (msg.isError) {
+                                    { viewModel.retryLastMessage() }
+                                } else null
+                            )
+                        }
+
+                        if (isGenerating) {
+                            item {
+                                ThinkingBubble()
+                            }
                         }
                     }
                 }
@@ -574,15 +695,29 @@ fun ChatScreen(
             lastHeardText = lastVoiceCommand,
             autoSpeakResponse = autoReadVoice,
             onAutoSpeakChange = { viewModel.autoReadVoiceResponse.value = it },
-            onStartListening = {
-                onMicClicked()
-            },
+            onStartListening = { onMicClicked() },
             onExecuteCommand = { cmd ->
                 viewModel.processVoiceCommand(cmd) { feedback ->
                     Toast.makeText(context, feedback, Toast.LENGTH_SHORT).show()
                 }
             },
-            onDismiss = { showVoiceDialog = false }
+            onDismiss = {
+                showVoiceDialog = false
+                AvatarStateManager.returnToIdle()
+            }
+        )
+    }
+
+    // Action Confirmation Preview Dialog (WhatsApp, SMS, Alarms, Reminders)
+    pendingAction?.let { validation ->
+        ActionConfirmationDialog(
+            validationResult = validation,
+            onConfirm = { confirmedAction ->
+                viewModel.confirmAndExecuteAction(confirmedAction, app)
+            },
+            onDismiss = {
+                viewModel.dismissPendingAction()
+            }
         )
     }
 }

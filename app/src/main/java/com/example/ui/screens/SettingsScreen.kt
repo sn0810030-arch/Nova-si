@@ -21,15 +21,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -86,6 +90,9 @@ import com.example.ui.viewmodel.NovaViewModel
 fun SettingsScreen(
     viewModel: NovaViewModel,
     onBack: () -> Unit,
+    onNavigateToMemory: () -> Unit,
+    onNavigateToTasks: () -> Unit,
+    onNavigateToDevices: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -95,10 +102,16 @@ fun SettingsScreen(
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
     val testResult by viewModel.connectionTestResult.collectAsState()
     val isTesting by viewModel.isTestingConnection.collectAsState()
+    val usedBytes by viewModel.memoryUsedBytes.collectAsState()
+    val memories by viewModel.allMemories.collectAsState()
+    val corrections by viewModel.allCorrections.collectAsState()
 
     var keyInput by remember(currentKey) { mutableStateOf(currentKey) }
     var tempSlider by remember(temperature) { mutableFloatStateOf(temperature) }
     var showClearConfirm by remember { mutableStateOf(false) }
+
+    val usedKb = usedBytes / 1024f
+    val memoryProgress = (usedKb / (30f * 1024f)).coerceIn(0f, 1f)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -126,9 +139,7 @@ fun SettingsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = NovaCosmicBg
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = NovaCosmicBg)
             )
         }
     ) { innerPadding ->
@@ -138,11 +149,145 @@ fun SettingsScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Section 1: Gemini API Configuration
+            // Section 1: 30 MB Long-Term Memory & Mistake Rules
             SettingsCard(
-                title = "Gemini API Configuration",
+                title = "30 MB Long-Term Memory",
+                icon = Icons.Default.Psychology
+            ) {
+                Text(
+                    text = "Persistent storage that survives app restarts, reboots, and updates. Remembers user preferences, project facts, and mistake correction rules.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Storage Budget Used",
+                        style = MaterialTheme.typography.bodySmall.copy(color = NovaTextPrimary, fontWeight = FontWeight.Medium)
+                    )
+                    Text(
+                        text = "${String.format("%.2f", usedKb)} KB / 30 MB",
+                        style = MaterialTheme.typography.labelSmall.copy(color = NovaCyan, fontWeight = FontWeight.Bold)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                LinearProgressIndicator(
+                    progress = { memoryProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(CircleShape),
+                    color = NovaCyan,
+                    trackColor = Color(0xFF1E293B)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = onNavigateToMemory,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1E293B),
+                        contentColor = NovaCyan
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("open_memory_hub_button")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Manage Saved Facts & Correction Rules (${memories.size + corrections.size})")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // Section 2: Scheduled Tasks & Alarms
+            SettingsCard(
+                title = "Background Tasks & Reminders",
+                icon = Icons.Default.Alarm
+            ) {
+                Text(
+                    text = "Scheduled reminders and alarms set via voice commands using Android AlarmManager.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = onNavigateToTasks,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1E293B),
+                        contentColor = NovaCyan
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("open_tasks_button")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("View Scheduled Tasks & Alarms")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // Section 3: Bluetooth & Smart Devices
+            SettingsCard(
+                title = "Bluetooth & Smart Devices",
+                icon = Icons.Default.Headphones
+            ) {
+                Text(
+                    text = "Manage Bluetooth audio routing to headphones/speakers, and control smart home devices.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = onNavigateToDevices,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1E293B),
+                        contentColor = NovaCyan
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("open_devices_button")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Open Devices & Audio Control")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // Section 4: Gemini API Configuration
+            SettingsCard(
+                title = "Google Gemini AI Engine",
                 icon = Icons.Default.Key
             ) {
                 val effectiveKey = GeminiClient.getEffectiveApiKey(keyInput)
@@ -160,7 +305,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isKeyActive) "API Status: Ready & Active" else "API Status: Offline fallback active",
+                        text = if (isKeyActive) "Engine Status: Live Cloud Active" else "Engine Status: Intelligent Offline Mode",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             color = if (isKeyActive) NovaSuccess else NovaWarning
@@ -169,7 +314,7 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    text = "Enter your Google Gemini API key to activate live real-time AI responses. If omitted, Nova uses intelligent local responses.",
+                    text = "Enter your Google Gemini API key to activate live cloud responses. Leave empty to use Yesmin's offline responder.",
                     style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
                 )
 
@@ -241,7 +386,6 @@ fun SettingsScreen(
                     }
                 }
 
-                // Test result banner
                 testResult?.let { result ->
                     Spacer(modifier = Modifier.height(10.dp))
                     val isSuccess = result.startsWith("Success")
@@ -263,18 +407,11 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 2: Model Selection
+            // Section 5: Model Selection
             SettingsCard(
-                title = "AI Model Engine",
+                title = "Model Selection",
                 icon = Icons.Default.AutoAwesome
             ) {
-                Text(
-                    text = "Select which Google Gemini model executes your conversation requests:",
-                    style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
                 GeminiClient.AVAILABLE_MODELS.forEach { (modelId, displayName) ->
                     val isSelected = selectedModel == modelId
                     Row(
@@ -315,9 +452,9 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 3: Generation Parameters
+            // Section 6: Generation Tuning
             SettingsCard(
-                title = "Generation Tuning",
+                title = "Creativity & Temperature",
                 icon = Icons.Default.Tune
             ) {
                 Row(
@@ -325,20 +462,8 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Temperature (Creativity)",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Medium,
-                            color = NovaTextPrimary
-                        )
-                    )
-                    Text(
-                        text = String.format("%.1f", tempSlider),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = NovaCyan
-                        )
-                    )
+                    Text("Temperature", style = MaterialTheme.typography.bodyMedium.copy(color = NovaTextPrimary))
+                    Text(String.format("%.1f", tempSlider), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = NovaCyan))
                 }
 
                 Slider(
@@ -356,16 +481,11 @@ fun SettingsScreen(
                     ),
                     modifier = Modifier.testTag("temperature_slider")
                 )
-
-                Text(
-                    text = "Lower values produce precise, focused, and deterministic answers. Higher values encourage imaginative, creative outputs.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
-                )
             }
 
-            // Section 4: Speech & Audio
+            // Section 7: Voice Readout
             SettingsCard(
-                title = "Voice & Speech",
+                title = "Voice Readout & TTS",
                 icon = Icons.AutoMirrored.Filled.VolumeUp
             ) {
                 Row(
@@ -375,14 +495,14 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Text-to-Speech Output",
+                            text = "Auto-Readout for Voice",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium,
                                 color = NovaTextPrimary
                             )
                         )
                         Text(
-                            text = "Enable read-aloud buttons on assistant messages",
+                            text = "Speaks answers aloud with 3D avatar mouth sync",
                             style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
                         )
                     }
@@ -400,18 +520,11 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 5: Data Management
+            // Section 8: Data Management
             SettingsCard(
                 title = "Data Management",
                 icon = Icons.Default.DeleteForever
             ) {
-                Text(
-                    text = "Manage your stored conversation history and local SQLite database cache.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
                 Button(
                     onClick = { showClearConfirm = true },
                     colors = ButtonDefaults.buttonColors(
@@ -420,24 +533,24 @@ fun SettingsScreen(
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("clear_all_data_button")
                 ) {
-                    Text("Clear All Chat Conversations")
+                    Text("Clear All Chats & Reset Memory")
                 }
             }
 
-            // Section 6: About
+            // Section 9: About
             SettingsCard(
-                title = "About Nova AI",
+                title = "About Yesmin / Nova AI",
                 icon = Icons.Default.Info
             ) {
                 Text(
-                    text = "Nova AI Assistant v1.0.0",
+                    text = "Yesmin AI (Nova Engine) v2.0.0",
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = NovaTextPrimary
                     )
                 )
                 Text(
-                    text = "Engineered for high performance with Jetpack Compose, Room persistence, and Google Gemini architecture.",
+                    text = "Equipped with real-time 3D expressive avatar, 30MB persistent SQLite memory, self-correction learning, exact action execution, AlarmManager background tasks, and Bluetooth audio controls.",
                     style = MaterialTheme.typography.bodySmall.copy(color = NovaTextSecondary)
                 )
             }
@@ -450,14 +563,14 @@ fun SettingsScreen(
             containerColor = NovaSurfaceCard,
             title = {
                 Text(
-                    text = "Delete All Conversations?",
+                    text = "Reset All Data?",
                     color = NovaTextPrimary,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "This will permanently wipe all chat threads and reset Nova AI. This action cannot be undone.",
+                    text = "This will wipe all conversation threads, 30MB long-term facts, and correction rules.",
                     color = NovaTextSecondary
                 )
             },
@@ -466,14 +579,14 @@ fun SettingsScreen(
                     onClick = {
                         viewModel.clearAllData()
                         showClearConfirm = false
-                        Toast.makeText(context, "All chats cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "All data reset", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = NovaError,
                         contentColor = Color.White
                     )
                 ) {
-                    Text("Clear Everything")
+                    Text("Reset All")
                 }
             },
             dismissButton = {
